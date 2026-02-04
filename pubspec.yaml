@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+
   flutter:
     sdk: flutter
 
@@ -38,6 +39,7 @@ dependencies:
   camera: ^0.10.5
   flutter_vision: ^1.1.4
   permission_handler: ^11.3.0
+  flutter_tts: ^3.8.3
 
 dev_dependencies:
   flutter_test:

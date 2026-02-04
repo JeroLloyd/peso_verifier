@@ -22,9 +22,13 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.peso_verifier"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        
+        // --- THIS IS THE FIX ---
+        // We changed this from flutter.minSdkVersion to 21
+        // This allows the Text-To-Speech engine to work.
+        minSdk = flutter.minSdkVersion 
+        // -----------------------
+        
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

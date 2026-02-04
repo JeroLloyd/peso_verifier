@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_vision/flutter_vision.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart'; // REQUIRED FOR HAPTICS
+import 'package:flutter_tts/flutter_tts.dart'; // REQUIRED FOR VOICE
 
 late List<CameraDescription> cameras;
 
@@ -22,6 +24,8 @@ class PesoAuthApp extends StatefulWidget {
 class _PesoAuthAppState extends State<PesoAuthApp> {
   late CameraController controller;
   late FlutterVision vision;
+  late FlutterTts flutterTts; // VOICE ENGINE
+
   bool isLoaded = false;
   bool isProcessing = false;
   File? capturedImage;
@@ -67,6 +71,19 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
   void initState() {
     super.initState();
     initApp();
+    initVoice(); // START VOICE ENGINE
+  }
+
+  void initVoice() async {
+    flutterTts = FlutterTts();
+    
+    // 1. Wait for engine to start
+    await flutterTts.awaitSpeakCompletion(true); 
+    
+    // 2. Set Volume & Speed
+    await flutterTts.setVolume(1.0);
+    await flutterTts.setSpeechRate(0.5);
+    await flutterTts.setPitch(1.0);
   }
 
   Future<void> initApp() async {
@@ -96,6 +113,9 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
 
   Future<void> captureAndScan() async {
     if (isProcessing) return;
+
+    // 1. HAPTIC FEEDBACK (Mechanical Click feel)
+    HapticFeedback.mediumImpact();
 
     setState(() {
       isProcessing = true;
@@ -128,8 +148,11 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
     }
   }
 
-  // --- NEW NEUTRAL REPORT LOGIC ---
+  // --- NEUTRAL REPORT + TECHNO EFFECTS ---
   void _generateAnalysisReport(List<Map<String, dynamic>> results, File image) {
+    // 2. SUCCESS HAPTIC (Heavy thud)
+    HapticFeedback.heavyImpact();
+
     String detectedDenomination = "Unknown";
     bool isCoin = false;
 
@@ -151,7 +174,10 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
       }
     }
 
-    // 2. Prepare Data (No "Verdict", just stats)
+    // 3. VOICE ANNOUNCEMENT
+    _speakResult(detectedDenomination);
+
+    // 2. Prepare Data
     String title = "ANALYSIS COMPLETE";
     Color headerColor = Colors.blue[800]!;
     IconData headerIcon = Icons.analytics_outlined;
@@ -169,6 +195,14 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
       backgroundColor: Colors.transparent,
       builder: (context) => _buildReportCard(title, headerColor, headerIcon, results, subTitle),
     );
+  }
+
+  Future<void> _speakResult(String text) async {
+    if (text != "Unknown") {
+      await flutterTts.speak("Analysis complete. $text detected.");
+    } else {
+      await flutterTts.speak("Analysis complete. No target identified.");
+    }
   }
 
   Widget _buildReportCard(String title, Color color, IconData icon, List<Map<String, dynamic>> results, String subTitle) {
@@ -213,7 +247,7 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    "Percentages indicate AI confidence in recognizing the visual feature. High percentages are NOT a guarantee of authenticity. Always verify manually.",
+                    "Percentages indicate AI confidence. High percentages are NOT a guarantee of authenticity. Always verify manually.",
                     style: TextStyle(color: Colors.amber[900], fontSize: 12, height: 1.3),
                   ),
                 ),
@@ -371,6 +405,7 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
   void dispose() {
     controller.dispose();
     vision.closeYoloModel();
+    flutterTts.stop(); // Stop voice
     super.dispose();
   }
 }
