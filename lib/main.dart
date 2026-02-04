@@ -28,16 +28,39 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
   List<Map<String, dynamic>> yoloResults = [];
   bool isFlashOn = false;
 
-  // --- 1. THE HUMAN DICTIONARY (Fixes "Computer Naming") ---
   final Map<String, String> friendlyNames = {
+    // Specific Bills
+    '1000_pearl': '1000 Peso (Pearl)',
+    '1000_pearl_watermark': 'Watermark (1000)',
+    '500_big_parrot': '500 Peso (Parrot)',
+    '500_parrot_watermark': 'Watermark (500)',
+    '200_tarsier': '200 Peso (Tarsier)',
+    '200_tarsier_watermark': 'Watermark (200)',
+    '100_whale': '100 Peso (Whale)',
+    '100_whale_watermark': 'Watermark (100)',
+    '50_maliputo': '50 Peso (Maliputo)',
+    '50_maliputo_watermark': 'Watermark (50)',
+    '20_civet': '20 Peso (Civet)',
+    '20_civet_watermark': 'Watermark (20)',
+    
+    // Coins
+    '20_New_Front': '20 Peso Coin', '20_New_Back': '20 Peso Coin',
+    '10_New_Front': '10 Peso Coin', '10_New_Back': '10 Peso Coin',
+    '5_New_Front': '5 Peso Coin',   '5_New_Back': '5 Peso Coin',
+    '1_New_Front': '1 Peso Coin',   '1_New_Back': '1 Peso Coin',
+    '25Cent_New_Front': '25¢ Coin', '25Cent_New_Back': '25¢ Coin',
+    
+    // Security Features
     'security_thread': 'Security Thread',
-    'optically_variable_device': 'Hologram',
-    'see_through_mark': 'See-Through Text',
+    'optically_variable_device': 'Hologram (OVD)',
+    'clear_window': 'Clear Window',
     'concealed_value': 'Hidden Value',
+    'see_through_mark': 'See-Through Text',
     'serial_number': 'Serial Number',
-    'value': 'Denomination',
-    'watermark': 'Watermark',
-    'portrait': 'Portrait',
+    'portrait': 'Portrait (Face)',
+    'value': 'Value Label',
+    'eagle': 'Eagle Crest',
+    'sampaguita': 'Sampaguita',
   };
 
   @override
@@ -48,7 +71,6 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
 
   Future<void> initApp() async {
     await Permission.camera.request();
-    // High Res is okay for Capture Mode (Honor X9a support)
     controller = CameraController(
       cameras[0], 
       ResolutionPreset.high, 
@@ -92,11 +114,11 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
         imageHeight: decodedImage.height,
         imageWidth: decodedImage.width,
         iouThreshold: 0.4,
-        confThreshold: 0.20, 
-        classThreshold: 0.20,
+        confThreshold: 0.10, // Keep lenient to find features
+        classThreshold: 0.10,
       );
 
-      _generateVerdict(result, imageFile);
+      _generateAnalysisReport(result, imageFile);
 
     } catch (e) {
       print("❌ Error: $e");
@@ -106,47 +128,34 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
     }
   }
 
-  void _generateVerdict(List<Map<String, dynamic>> results, File image) {
-    // 1. Analyze Features
-    final strongFeatures = [
-      'security_thread', 'optically_variable_device', 
-      'see_through_mark', 'concealed_value'
-    ];
+  // --- NEW NEUTRAL REPORT LOGIC ---
+  void _generateAnalysisReport(List<Map<String, dynamic>> results, File image) {
+    String detectedDenomination = "Unknown";
+    bool isCoin = false;
 
-    int strongCount = 0;
-    int totalCount = results.length;
-
+    // 1. Identify Target
     for (var res in results) {
-      if (strongFeatures.contains(res['tag'])) strongCount++;
+      if (res['box'][4] < 0.10) continue; 
+      String tag = res['tag'];
+
+      if (tag.contains('1000_')) detectedDenomination = "1000 Peso";
+      else if (tag.contains('500_')) detectedDenomination = "500 Peso";
+      else if (tag.contains('200_')) detectedDenomination = "200 Peso";
+      else if (tag.contains('100_')) detectedDenomination = "100 Peso";
+      else if (tag.contains('50_')) detectedDenomination = "50 Peso";
+      else if (tag.contains('20_') && !tag.contains('Coin')) detectedDenomination = "20 Peso";
+
+      if (tag.contains('Coin') || tag.contains('New_') || tag.contains('Old_') || tag.contains('25Cent')) {
+        isCoin = true;
+        detectedDenomination = "Coin";
+      }
     }
 
-    // 2. Decide Verdict
-    String verdictTitle;
-    Color verdictColor;
-    IconData verdictIcon;
-    String verdictMsg;
-
-    if (strongCount >= 1) {
-      verdictTitle = "LIKELY AUTHENTIC";
-      verdictMsg = "Advanced security features detected.";
-      verdictColor = Colors.green[700]!;
-      verdictIcon = Icons.verified_user_rounded;
-    } else if (totalCount >= 3) {
-      verdictTitle = "LIKELY AUTHENTIC";
-      verdictMsg = "Multiple identifying marks found.";
-      verdictColor = Colors.green[700]!;
-      verdictIcon = Icons.verified_user_rounded;
-    } else if (results.isNotEmpty) {
-      verdictTitle = "INCONCLUSIVE";
-      verdictMsg = "Some features found, but key security marks missing.";
-      verdictColor = Colors.orange[800]!;
-      verdictIcon = Icons.help_outline_rounded;
-    } else {
-      verdictTitle = "NOT DETECTED";
-      verdictMsg = "No banknote features identified. Check lighting.";
-      verdictColor = Colors.red[700]!;
-      verdictIcon = Icons.error_outline_rounded;
-    }
+    // 2. Prepare Data (No "Verdict", just stats)
+    String title = "ANALYSIS COMPLETE";
+    Color headerColor = Colors.blue[800]!;
+    IconData headerIcon = Icons.analytics_outlined;
+    String subTitle = detectedDenomination == "Unknown" ? "Target Unknown" : "Target: $detectedDenomination";
 
     setState(() {
       capturedImage = image;
@@ -154,23 +163,17 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
       isProcessing = false;
     });
 
-    // 3. Show Report Card
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _buildReportCard(verdictTitle, verdictMsg, verdictColor, verdictIcon, results, strongFeatures),
-    ).whenComplete(() {
-      // NOTE: We do NOT reset camera here automatically. 
-      // We let the user look at the image.
-      // They must press the "X" or "Scan Again" button on the screen.
-    });
+      builder: (context) => _buildReportCard(title, headerColor, headerIcon, results, subTitle),
+    );
   }
 
-  // Extracted Report Card Widget for cleaner code
-  Widget _buildReportCard(String title, String msg, Color color, IconData icon, List results, List strongFeatures) {
+  Widget _buildReportCard(String title, Color color, IconData icon, List<Map<String, dynamic>> results, String subTitle) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.65, 
+      height: MediaQuery.of(context).size.height * 0.75, 
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
@@ -181,60 +184,83 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
         children: [
           Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
           const SizedBox(height: 15),
-          Icon(icon, color: color, size: 50),
-          const SizedBox(height: 10),
-          Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-          Text(msg, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-          const SizedBox(height: 15),
-
+          
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.amber[200]!)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.blue[200]!)),
+            child: Text(subTitle, style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 12)),
+          ),
+          
+          const SizedBox(height: 10),
+          Icon(icon, color: color, size: 50),
+          const SizedBox(height: 5),
+          Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+          
+          const SizedBox(height: 15),
+          
+          // --- THE DISCLAIMER BOX ---
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber[300]!)
+            ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.warning_amber_rounded, size: 20, color: Colors.amber[900]),
-                const SizedBox(width: 8),
-                const Expanded(child: Text("Always manually tilt the bill to verify the shiny thread.", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                Icon(Icons.info_outline, color: Colors.amber[900], size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "Percentages indicate AI confidence in recognizing the visual feature. High percentages are NOT a guarantee of authenticity. Always verify manually.",
+                    style: TextStyle(color: Colors.amber[900], fontSize: 12, height: 1.3),
+                  ),
+                ),
               ],
             ),
           ),
           
           const SizedBox(height: 20),
-          const Align(alignment: Alignment.centerLeft, child: Text("CONFIDENCE RATINGS:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey))),
+          const Align(alignment: Alignment.centerLeft, child: Text("DETECTED FEATURES:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey))),
           const SizedBox(height: 10),
 
           Expanded(
             child: results.isEmpty 
-            ? Center(child: Text("No features to rate.", style: TextStyle(color: Colors.grey[400])))
+            ? Center(child: Text("No identifying features detected.", style: TextStyle(color: Colors.grey[400])))
             : ListView.builder(
                 itemCount: results.length,
                 itemBuilder: (context, index) {
                   final rawTag = results[index]['tag'];
-                  final confidence = (results[index]['box'][4] * 100).toStringAsFixed(0);
-                  
-                  // HUMAN NAME CONVERSION
+                  final confidenceRaw = results[index]['box'][4];
+                  final confidence = (confidenceRaw * 100).toStringAsFixed(0);
                   final displayName = friendlyNames[rawTag] ?? rawTag.replaceAll('_', ' ').toUpperCase();
-                  final isStrong = strongFeatures.contains(rawTag);
+                  
+                  // Neutral Coloring
+                  bool isHighVal = confidenceRaw > 0.85;
                   
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isStrong ? Colors.green[50] : Colors.grey[50],
+                      color: Colors.grey[50],
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: isStrong ? Colors.green[100]! : Colors.grey[200]!),
+                      border: Border.all(color: Colors.grey[300]!),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Icon(isStrong ? Icons.verified : Icons.analytics_outlined, size: 18, color: isStrong ? Colors.green[700] : Colors.grey[600]),
-                            const SizedBox(width: 10),
-                            Text(displayName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          ],
+                        Expanded(
+                          child: Text(displayName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87), overflow: TextOverflow.ellipsis),
                         ),
-                        Text("$confidence%", style: TextStyle(fontWeight: FontWeight.bold, color: isStrong ? Colors.green[700] : Colors.black87)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isHighVal ? Colors.green[100] : Colors.blue[100],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text("$confidence%", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isHighVal ? Colors.green[800] : Colors.blue[800])),
+                        ),
                       ],
                     ),
                   );
@@ -257,26 +283,15 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
   }
 
   void resetCamera() {
-    // If sheet is open, close it. If not, just reset state.
-    if (Navigator.canPop(context)) { 
-      Navigator.pop(context); 
-    }
-    setState(() {
-      capturedImage = null;
-      yoloResults = [];
-    });
+    if (Navigator.canPop(context)) Navigator.pop(context); 
+    setState(() { capturedImage = null; yoloResults = []; });
   }
 
   void toggleFlash() async {
     if (controller.value.isInitialized) {
-      if (isFlashOn) {
-        await controller.setFlashMode(FlashMode.off);
-      } else {
-        await controller.setFlashMode(FlashMode.torch);
-      }
-      setState(() {
-        isFlashOn = !isFlashOn;
-      });
+      if (isFlashOn) await controller.setFlashMode(FlashMode.off);
+      else await controller.setFlashMode(FlashMode.torch);
+      setState(() { isFlashOn = !isFlashOn; });
     }
   }
 
@@ -284,7 +299,6 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
   Widget build(BuildContext context) {
     if (!isLoaded) return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator()));
 
-    // Honor X9a Scaling Logic
     var scale = 1.0;
     if (capturedImage == null && controller.value.isInitialized) {
       final size = MediaQuery.of(context).size;
@@ -298,80 +312,23 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
       body: Stack(
         fit: StackFit.expand, 
         children: [
-          // 1. IMAGE/CAMERA LAYER
           if (capturedImage == null)
-            Transform.scale(
-              scale: scale,
-              child: Center(child: CameraPreview(controller)),
-            )
+            Transform.scale(scale: scale, child: Center(child: CameraPreview(controller)))
           else
             Image.file(capturedImage!, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
 
-          // 2. OVERLAYS (BOXES)
-          if (capturedImage != null)
-             ...displayCleanBoxes(yoloResults),
+          if (capturedImage != null) ...displayCleanBoxes(yoloResults),
 
-          // 3. FLASHLIGHT (Only when camera is live)
           if (capturedImage == null)
-            Positioned(
-              top: 50, right: 20,
-              child: FloatingActionButton(
-                heroTag: "flash",
-                backgroundColor: isFlashOn ? Colors.yellow : Colors.white,
-                onPressed: toggleFlash,
-                mini: true,
-                child: Icon(isFlashOn ? Icons.flash_on : Icons.flash_off, color: Colors.black),
-              ),
-            ),
+            Positioned(top: 50, right: 20, child: FloatingActionButton(heroTag: "flash", backgroundColor: isFlashOn ? Colors.yellow : Colors.white, onPressed: toggleFlash, mini: true, child: Icon(isFlashOn ? Icons.flash_on : Icons.flash_off, color: Colors.black))),
 
-          // 4. MAIN CAPTURE BUTTON (Bottom Center)
           if (capturedImage == null && !isProcessing)
-            Positioned(
-              bottom: 40, left: 0, right: 0,
-              child: Center(
-                child: GestureDetector(
-                  onTap: captureAndScan,
-                  child: Container(
-                    width: 80, height: 80,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.grey[300]!, width: 5),
-                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)],
-                    ),
-                    child: Icon(Icons.camera_alt_rounded, size: 40, color: Colors.grey[800]),
-                  ),
-                ),
-              ),
-            ),
+            Positioned(bottom: 40, left: 0, right: 0, child: Center(child: GestureDetector(onTap: captureAndScan, child: Container(width: 80, height: 80, decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.grey[300]!, width: 5), boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)]), child: Icon(Icons.camera_alt_rounded, size: 40, color: Colors.grey[800]))))),
 
-          // 5. LOADING SPINNER
-          if (isProcessing)
-             Container(
-               color: Colors.black54,
-               child: const Center(child: CircularProgressIndicator(color: Colors.white)),
-             ),
+          if (isProcessing) Container(color: Colors.black54, child: const Center(child: CircularProgressIndicator(color: Colors.white))),
 
-          // --- FIX: THE "UNSTUCK" BUTTON ---
-          // This button appears ONLY when the image is frozen (capturedImage != null).
-          // It ensures you can ALWAYS reset, even if you swiped away the report card.
           if (capturedImage != null)
-            Positioned(
-              bottom: 40,
-              left: 20,
-              right: 20,
-              child: ElevatedButton.icon(
-                onPressed: resetCamera,
-                icon: const Icon(Icons.refresh, color: Colors.white),
-                label: const Text("SCAN AGAIN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[700],
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                  elevation: 10,
-                ),
-              ),
-            ),
+            Positioned(bottom: 40, left: 20, right: 20, child: ElevatedButton.icon(onPressed: resetCamera, icon: const Icon(Icons.refresh, color: Colors.white), label: const Text("SCAN AGAIN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700], padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)), elevation: 10))),
         ],
       ),
     );
@@ -379,13 +336,11 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
 
   List<Widget> displayCleanBoxes(List<Map<String, dynamic>> results) {
     if (results.isEmpty || capturedImage == null) return [];
-    
     final Size size = MediaQuery.of(context).size;
     double imageW = controller.value.previewSize!.height; 
     double imageH = controller.value.previewSize!.width;
     double factorX = size.width / imageW;
     double factorY = size.height / imageH;
-    
     double scale = factorX > factorY ? factorX : factorY;
     double offsetX = (imageW * scale - size.width) / 2;
     double offsetY = (imageH * scale - size.height) / 2;
@@ -393,55 +348,22 @@ class _PesoAuthAppState extends State<PesoAuthApp> {
     return results.map((result) {
       final box = result["box"];
       String rawTag = result['tag'];
-      
-      // FIX: FORCE HUMAN NAME
-      // This line grabs the clean name from our dictionary. 
-      // If the tag isn't in the list, it defaults to Uppercase.
       String displayName = friendlyNames[rawTag] ?? rawTag.replaceAll('_', ' ').toUpperCase();
+      double confidenceVal = box[4];
+      String confidenceStr = (confidenceVal * 100).toStringAsFixed(0);
       
-      String confidence = (box[4] * 100).toStringAsFixed(0);
-
-      bool isSecurityFeature = ['security_thread', 'optically_variable_device', 'see_through_mark'].contains(rawTag);
-      Color boxColor = isSecurityFeature ? Colors.amber[700]! : Colors.blue[400]!;
+      bool isValid = confidenceVal >= 0.30;
+      Color boxColor = isValid ? Colors.blue : Colors.grey;
 
       double left = (box[0] * scale) - offsetX;
       double top = (box[1] * scale) - offsetY;
       double width = (box[2] - box[0]) * scale;
       double height = (box[3] - box[1]) * scale;
 
-      return Positioned(
-        left: left,
-        top: top,
-        width: width,
-        height: height,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: boxColor, width: 2.5),
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            Positioned(
-              top: -18, 
-              left: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: boxColor,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                ),
-                child: Text(
-                  "$displayName $confidence%", // HUMAN READABLE LABEL
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
+      return Positioned(left: left, top: top, width: width, height: height, child: Stack(clipBehavior: Clip.none, children: [
+        Container(decoration: BoxDecoration(border: Border.all(color: boxColor, width: 2.5), borderRadius: BorderRadius.circular(6))),
+        Positioned(top: -18, left: 0, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: boxColor, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)]), child: Text("$displayName $confidenceStr%", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)))),
+      ]));
     }).toList();
   }
 
